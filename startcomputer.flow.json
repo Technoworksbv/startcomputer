@@ -1,0 +1,168 @@
+[
+    {
+        "id": "tab_fixed_piezo",
+        "type": "tab",
+        "label": "Startcomputer",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "start_on",
+        "type": "inject",
+        "z": "tab_fixed_piezo",
+        "name": "START ON",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 120,
+        "y": 60,
+        "wires": [
+            [
+                "startcontroller"
+            ]
+        ]
+    },
+    {
+        "id": "start_off",
+        "type": "inject",
+        "z": "tab_fixed_piezo",
+        "name": "START OFF",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "false",
+        "payloadType": "bool",
+        "x": 120,
+        "y": 100,
+        "wires": [
+            [
+                "startcontroller"
+            ]
+        ]
+    },
+    {
+        "id": "startcontroller",
+        "type": "function",
+        "z": "tab_fixed_piezo",
+        "name": "STARTCONTROLLER",
+        "func": "// ===== START / STOP =====\nconst run = msg.payload;\n\nfunction status(txt){ node.send([null,null,null,{payload:txt}]); }\n\n// STOP: expliciete harde reset van alle outputs\nif (run === false) {\n  context.set('running', false);\n  const cd = context.get('cd'); if (cd) clearInterval(cd);\n\n  node.send([\n    { payload: { outputs: { oranje_vlag: 0 } } },\n    { payload: { outputs: { hoorn: 0 } } },\n    { payload: { outputs: { piezo: 0 } } },\n    { payload: 'STOP' }\n  ]);\n  return null;\n}\n\n// Start alleen bij true en voorkom dubbel starten\nif (run !== true || context.get('running')) return null;\ncontext.set('running', true);\n\n// ===== CONFIG =====\nconst ORANGE_TIME = 20 * 1000;\nconst T5 = 5 * 60 * 1000;\nconst T4 = 4 * 60 * 1000;\nconst T1 = 1 * 60 * 1000;\nconst PIEZO_BEFORE = 10 * 1000;\n\nconst HORN_SHORT = 500;\nconst HORN_LONG  = 2000;\n\n// ===== HELPERS =====\nfunction horn(ms,label){\n  status(`HOORN – ${label}`);\n  node.send([null,{payload:{outputs:{hoorn:1}}},null,null]);\n  setTimeout(()=>{\n    if (!context.get('running')) return;\n    node.send([null,{payload:{outputs:{hoorn:0}}},null,null]);\n  }, ms);\n}\nfunction piezo(on){ node.send([null,null,{payload:{outputs:{piezo:on?1:0}}},null]); }\n\n// ===== INIT-RESET BIJ START ON (essentieel!) =====\npiezo(false); // expliciete reset zodat DO nooit blijft hangen\nstatus('START ON – INIT RESET PIEZO');\n\n// ===== ORANJE VLAG =====\nnode.send([{payload:{outputs:{oranje_vlag:1}}},null,null,null]);\nstatus('ORANJE VLAG OP');\n\nsetTimeout(()=>{\n  if (!context.get('running')) return;\n  node.send([{payload:{outputs:{oranje_vlag:0}}},null,null,null]);\n  horn(HORN_SHORT,'VLAG AF (EENMALIG)');\n  startClass();\n}, ORANGE_TIME);\n\n// ===== KLASSE CYCLE =====\nfunction startClass(){\n  let cls = (context.get('cls')||0)+1; context.set('cls',cls);\n  status(`START KLASSE ${cls}`);\n\n  const startAt = Date.now()+T5;\n  const cd = setInterval(()=>{\n    if (!context.get('running')) return clearInterval(cd);\n    const s = Math.max(0,Math.round((startAt-Date.now())/1000));\n    status(`KLASSE ${cls} – START OVER ${s}s`);\n  },10000);\n  context.set('cd',cd);\n\n  setTimeout(()=>{ if(context.get('running')) horn(HORN_SHORT,'4 MIN'); }, T5-T4);\n  setTimeout(()=>{ if(context.get('running')) horn(HORN_SHORT,'1 MIN'); }, T5-T1);\n  setTimeout(()=>{ if(context.get('running')) piezo(true); }, T5-PIEZO_BEFORE);\n\n  setTimeout(()=>{\n    if (!context.get('running')) return;\n    clearInterval(cd);\n    piezo(false);\n    horn(HORN_LONG,'START');\n    startClass();\n  },T5);\n}\n\nreturn null;",
+        "outputs": 4,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 80,
+        "wires": [
+            [
+                "show_orange"
+            ],
+            [
+                "show_horn"
+            ],
+            [
+                "piezo_blinker"
+            ],
+            [
+                "debug_status"
+            ]
+        ]
+    },
+    {
+        "id": "piezo_blinker",
+        "type": "function",
+        "z": "tab_fixed_piezo",
+        "name": "PIEZO BLINKER",
+        "func": "const ON=250, OFF=750;\nlet t=context.get('t')||null, a=context.get('a')||false;\nconst v=msg?.payload?.outputs?.piezo;\nfunction send(x){node.send({payload:{outputs:{piezo:x}}});}\nfunction stop(){context.set('a',false); if(t){clearTimeout(t); t=null; context.set('t',null);} send(0);} \nif(v===1 && !a){a=true; context.set('a',true); (function loop(){ if(!context.get('a')) return; send(1); t=setTimeout(()=>{ send(0); t=setTimeout(loop,OFF); context.set('t',t); },ON); context.set('t',t); })();}\nif(v===0){ stop(); }\nreturn null;",
+        "outputs": 1,
+        "x": 760,
+        "y": 150,
+        "wires": [
+            [
+                "show_piezo",
+                "debug_piezo_raw"
+            ]
+        ]
+    },
+    {
+        "id": "debug_piezo_raw",
+        "type": "debug",
+        "z": "tab_fixed_piezo",
+        "name": "DEBUG PIEZO (RAW)",
+        "complete": "payload",
+        "x": 1010,
+        "y": 190,
+        "wires": []
+    },
+    {
+        "id": "debug_status",
+        "type": "debug",
+        "z": "tab_fixed_piezo",
+        "name": "STATUS",
+        "complete": "payload",
+        "x": 760,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "show_orange",
+        "type": "show-value",
+        "z": "tab_fixed_piezo",
+        "name": "ORANJE VLAG (DO)",
+        "path": "outputs.oranje_vlag",
+        "x": 760,
+        "y": 40,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "show_horn",
+        "type": "show-value",
+        "z": "tab_fixed_piezo",
+        "name": "HOORN (DO)",
+        "path": "outputs.hoorn",
+        "x": 780,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "show_piezo",
+        "type": "show-value",
+        "z": "tab_fixed_piezo",
+        "name": "PIEZO (DO)",
+        "path": "outputs.piezo",
+        "x": 1030,
+        "y": 120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fc59e9ccc5784fb6",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-show-value": "1.0.4"
+        }
+    }
+]
