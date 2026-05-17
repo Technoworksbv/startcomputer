@@ -93,14 +93,6 @@ Hierdoor kunnen bij een STOP of redeploy alle timers veilig worden verwijderd me
 clearAllTimers()
 ```
 
-Voordelen:
-
-* Geen memory leaks
-* Geen achterblijvende callbacks
-* Geen onverwachte signalen na STOP
-* Veilige herstarts
-
----
 
 # Hoornbesturing
 
