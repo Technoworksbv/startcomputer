@@ -1,5 +1,62 @@
 [
     {
+        "id": "d6dd6a11494db256",
+        "type": "tab",
+        "label": "Startcomputer",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "d7705837d454710a",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "START ON",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 240,
+        "y": 140,
+        "wires": [
+            [
+                "ad45c374913e8be0"
+            ]
+        ]
+    },
+    {
+        "id": "37139b2609c6dfad",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "START OFF",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "false",
+        "payloadType": "bool",
+        "x": 240,
+        "y": 180,
+        "wires": [
+            [
+                "ad45c374913e8be0"
+            ]
+        ]
+    },
+    {
         "id": "ad45c374913e8be0",
         "type": "function",
         "z": "d6dd6a11494db256",
@@ -27,5 +84,145 @@
                 "0df55139ccd8f740"
             ]
         ]
+    },
+    {
+        "id": "5944ac8f1d5a5089",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "ORANJE VLAG (DO)",
+        "path": "outputs.oranje_vlag",
+        "x": 1080,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "1333e04ec6e921b1",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "HOORN (DO)",
+        "path": "outputs.hoorn",
+        "x": 1060,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "351fe6b9047d6b7f",
+        "type": "function",
+        "z": "d6dd6a11494db256",
+        "name": "PIEZO BLINKER",
+        "func": "// ================= CONFIG =================\nconst ON_TIME  = 250;  // ms\nconst OFF_TIME = 750;  // ms\n\n// ================= STATE ==================\nlet timer = context.get('timer') || null;\nlet active = context.get('active') || false;\n\n// ================= HELPERS =================\nfunction send(val) {\n    node.send({\n        payload: {\n            outputs: {\n                piezo: val\n            }\n        }\n    });\n}\n\nfunction stopBlinking() {\n    active = false;\n    context.set('active', false);\n\n    if (timer !== null) {\n        clearTimeout(timer);\n        timer = null;\n        context.set('timer', null);\n    }\n\n    // Forceer UIT\n    send(0);\n}\n\n// ================= DEPLOY / CLOSE =================\nnode.on('close', function () {\n    stopBlinking();\n});\n\n// ================= LOGIC =================\nconst cmd = msg && msg.payload && msg.payload.outputs\n    ? msg.payload.outputs.piezo\n    : undefined;\n\n// START knipperen\nif (cmd === 1 && !active) {\n    active = true;\n    context.set('active', true);\n\n    function loop() {\n        if (!context.get('active')) return;\n\n        // AAN\n        send(1);\n\n        timer = setTimeout(() => {\n            if (!context.get('active')) return;\n\n            // UIT\n            send(0);\n\n            timer = setTimeout(() => {\n                loop();\n            }, OFF_TIME);\n\n            context.set('timer', timer);\n        }, ON_TIME);\n\n        context.set('timer', timer);\n    }\n\n    loop();\n    return null;\n}\n\n// STOP knipperen\nif (cmd === 0) {\n    stopBlinking();\n    return null;\n}\n\n// Andere berichten negeren\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 200,
+        "wires": [
+            [
+                "cae96556aa6f7845"
+            ]
+        ]
+    },
+    {
+        "id": "cae96556aa6f7845",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "PIEZO (DO)",
+        "path": "outputs.piezo",
+        "x": 1050,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "0df55139ccd8f740",
+        "type": "debug",
+        "z": "d6dd6a11494db256",
+        "name": "STATUS",
+        "active": true,
+        "complete": "payload",
+        "x": 880,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "4dc3c7d96b2add0d",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "MANUAL HOORN ON",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "true",
+        "payloadType": "bool",
+        "x": 270,
+        "y": 260,
+        "wires": [
+            [
+                "83305cbf6d571062"
+            ]
+        ]
+    },
+    {
+        "id": "9b438688917650cd",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "MANUAL HOORN OFF",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "false",
+        "payloadType": "bool",
+        "x": 270,
+        "y": 300,
+        "wires": [
+            [
+                "83305cbf6d571062"
+            ]
+        ]
+    },
+    {
+        "id": "83305cbf6d571062",
+        "type": "function",
+        "z": "d6dd6a11494db256",
+        "name": "Manual horn HOLD",
+        "func": "// Manual hoorn HOLD (drukken = aan, loslaten = uit)\n\nconst on = msg.payload === true;\n\nnode.send({\n  payload: {\n    outputs: {\n      hoorn: on ? 1 : 0\n    }\n  }\n});\n\nreturn null;",
+        "outputs": 1,
+        "x": 530,
+        "y": 280,
+        "wires": [
+            [
+                "1333e04ec6e921b1"
+            ]
+        ]
+    },
+    {
+        "id": "2708aac71c1019c8",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-show-value": "1.0.4"
+        }
     }
 ]
