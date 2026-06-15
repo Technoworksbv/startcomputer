@@ -43,8 +43,7 @@ docker run -d \
   wagoautomation/node-red-cc100:1.0.0
 ```
 
-IP adresses: 
-```text
-X1:  DHCP
-X2: 10.10.10.10
-```
+| Interface | IP adres    |
+| --------- | ----------- |
+| X1        | DHCP        |
+| X2        | 10.10.10.10 |
