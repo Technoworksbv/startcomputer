@@ -7,75 +7,22 @@
         "info": ""
     },
     {
-        "id": "d7705837d454710a",
-        "type": "inject",
-        "z": "d6dd6a11494db256",
-        "name": "START ON",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "true",
-        "payloadType": "bool",
-        "x": 240,
-        "y": 140,
-        "wires": [
-            [
-                "ad45c374913e8be0"
-            ]
-        ]
-    },
-    {
-        "id": "37139b2609c6dfad",
-        "type": "inject",
-        "z": "d6dd6a11494db256",
-        "name": "START OFF",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "false",
-        "payloadType": "bool",
-        "x": 240,
-        "y": 180,
-        "wires": [
-            [
-                "ad45c374913e8be0"
-            ]
-        ]
-    },
-    {
         "id": "ad45c374913e8be0",
         "type": "function",
         "z": "d6dd6a11494db256",
-        "name": "STARTCONTROLLER",
-        "func": "// ======================================================\n// START / STOP AFHANDELING\n// ======================================================\n\n// Verwacht invoer:\n// - msg.payload === true  → START ON\n// - msg.payload === false → START OFF\n\nconst run = msg.payload;\n\n// ======================================================\n// TIMER MANAGEMENT\n// ======================================================\n\n// Alle actieve timers bewaren\nlet timers = context.get('timers') || [];\n\nfunction addTimer(t) {\n    timers.push(t);\n    context.set('timers', timers);\n}\n\n// Alles stoppen/resetten\nfunction clearAllTimers() {\n    timers = context.get('timers') || [];\n\n    timers.forEach(t => clearTimeout(t));\n\n    timers = [];\n    context.set('timers', timers);\n}\n\n// ======================================================\n// STATUS LOGGING\n// ======================================================\n\nfunction status(txt) {\n    node.send([null, null, null, { payload: txt }]);\n}\n\n// ======================================================\n// HOORN CONTROL (OVERLAP VEILIG)\n// ======================================================\n\nfunction hornOn(label = '') {\n\n    let count = context.get('hornCount') || 0;\n    count++;\n\n    context.set('hornCount', count);\n\n    status(`HOORN AAN ${label}`);\n\n    node.send([\n        null,\n        { payload: { outputs: { hoorn: 1 } } },\n        null,\n        null\n    ]);\n}\n\nfunction hornOff(label = '') {\n\n    let count = context.get('hornCount') || 0;\n\n    count--;\n\n    if (count <= 0) {\n\n        count = 0;\n\n        status(`HOORN UIT ${label}`);\n\n        node.send([\n            null,\n            { payload: { outputs: { hoorn: 0 } } },\n            null,\n            null\n        ]);\n    }\n\n    context.set('hornCount', count);\n}\n\n// Hoornpuls\nfunction horn(ms, label) {\n\n    hornOn(label);\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        hornOff(label);\n\n    }, ms));\n}\n\n// ======================================================\n// PIEZO CONTROL\n// ======================================================\n\nfunction piezo(on) {\n\n    status(`PIEZO ${on ? 'AAN' : 'UIT'}`);\n\n    node.send([\n        null,\n        null,\n        {\n            payload: {\n                outputs: {\n                    piezo: on ? 1 : 0\n                }\n            }\n        },\n        null\n    ]);\n}\n\n// ======================================================\n// START OFF = HARD RESET\n// ======================================================\n\nif (run === false) {\n\n    context.set('running', false);\n\n    clearAllTimers();\n\n    context.set('classNumber', 0);\n    context.set('hornCount', 0);\n\n    node.send([\n        { payload: { outputs: { oranje_vlag: 0 } } },\n        { payload: { outputs: { hoorn: 0 } } },\n        { payload: { outputs: { piezo: 0 } } },\n        { payload: 'START OFF – HARD RESET' }\n    ]);\n\n    return null;\n}\n\n// ======================================================\n// DUBBEL START BLOKKEREN\n// ======================================================\n\nif (run !== true || context.get('running')) {\n    return null;\n}\n\n// ======================================================\n// SYSTEEM ACTIEF\n// ======================================================\n\ncontext.set('running', true);\n\nstatus('START ON');\n\n// ======================================================\n// CONFIGURATIE\n// ======================================================\n\n// DEBUG SNELHEDEN\nconst ORANGE_TIME = 20 * 1000;\n\nconst T5 = 5 * 60 * 1000;\nconst T4 = 4 * 60 * 1000;\nconst T1 = 1 * 60 * 1000;\n\nconst PIEZO_BEFORE = 10 * 1000;\n\nconst HORN_SHORT = 500;\nconst HORN_LONG = 2000;\n\n// ======================================================\n// ORANJE VLAG FASE\n// ======================================================\n\nnode.send([\n    { payload: { outputs: { oranje_vlag: 1 } } },\n    null,\n    null,\n    null\n]);\n\nstatus('ORANJE VLAG OP');\n\naddTimer(setTimeout(() => {\n\n    if (!context.get('running')) return;\n\n    node.send([\n        { payload: { outputs: { oranje_vlag: 0 } } },\n        null,\n        null,\n        null\n    ]);\n\n    horn(HORN_SHORT, '5 Min signaal');\n\n    scheduleClass(1);\n\n}, ORANGE_TIME));\n\n// ======================================================\n// KLASSE SCHEDULER\n// ======================================================\n\nfunction scheduleClass(classNumber) {\n\n    if (!context.get('running')) return;\n\n    context.set('classNumber', classNumber);\n\n    status(`KLASSE ${classNumber} CYCLUS GESTART`);\n\n    // ------------------------------------------\n    // 4 MIN\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        horn(HORN_SHORT, `KLASSE ${classNumber} - (4 MIN)`);\n\n    }, T5 - T4));\n\n    // ------------------------------------------\n    // 1 MIN\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        horn(HORN_SHORT, `KLASSE ${classNumber} - (1 MIN)`);\n\n    }, T5 - T1));\n\n    // ------------------------------------------\n    // PIEZO START\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(true);\n\n    }, T5 - PIEZO_BEFORE));\n\n    // ------------------------------------------\n    // START MOMENT\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(false);\n\n        horn(HORN_LONG, `KLASSE ${classNumber} START`);\n\n        // Volgende klasse\n        scheduleClass(classNumber + 1);\n\n    }, T5));\n}\n\nreturn null;",
+        "name": "SC",
+        "func": "// ======================================================\n// START / STOP AFHANDELING\n// ======================================================\n\n// Verwacht invoer:\n// - msg.payload === true  → START ON\n// - msg.payload === false → START OFF\n\nconst run = msg.payload;\n\n// ======================================================\n// TIMER MANAGEMENT\n// ======================================================\n\n// Alle actieve timers bewaren\nlet timers = context.get('timers') || [];\n\nfunction addTimer(t) {\n    timers.push(t);\n    context.set('timers', timers);\n}\n\n// Alles stoppen/resetten\nfunction clearAllTimers() {\n    timers = context.get('timers') || [];\n\n    timers.forEach(t => clearTimeout(t));\n\n    timers = [];\n    context.set('timers', timers);\n}\n\n// ======================================================\n// STATUS LOGGING\n// ======================================================\n\nfunction status(txt) {\n    node.send([null, null, null, { payload: txt }]);\n}\n\n// ======================================================\n// HOORN CONTROL (OVERLAP VEILIG)\n// ======================================================\n\nfunction hornOn(label = '') {\n\n    let count = context.get('hornCount') || 0;\n    count++;\n\n    context.set('hornCount', count);\n\n    status(`HOORN AAN ${label}`);\n\n    node.send([\n        null,\n        { payload: { outputs: { hoorn: 1 } } },\n        null,\n        null\n    ]);\n}\n\nfunction hornOff(label = '') {\n\n    let count = context.get('hornCount') || 0;\n\n    count--;\n\n    if (count <= 0) {\n\n        count = 0;\n\n        status(`HOORN UIT ${label}`);\n\n        node.send([\n            null,\n            { payload: { outputs: { hoorn: 0 } } },\n            null,\n            null\n        ]);\n    }\n\n    context.set('hornCount', count);\n}\n\n// Hoornpuls\nfunction horn(ms, label) {\n\n    hornOn(label);\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        hornOff(label);\n\n    }, ms));\n}\n\n// ======================================================\n// PIEZO CONTROL\n// ======================================================\n\nfunction piezo(on) {\n\n    status(`PIEZO ${on ? 'AAN' : 'UIT'}`);\n\n    node.send([\n        null,\n        null,\n        {\n            payload: {\n                outputs: {\n                    piezo: on ? 1 : 0\n                }\n            }\n        },\n        null\n    ]);\n}\n\n// ======================================================\n// START OFF = HARD RESET\n// ======================================================\n\nif (run === false) {\n\n    context.set('running', false);\n\n    clearAllTimers();\n\n    context.set('classNumber', 0);\n    context.set('hornCount', 0);\n\n    node.send([\n        { payload: { outputs: { oranje_vlag: 0 } } },\n        { payload: { outputs: { hoorn: 0 } } },\n        { payload: { outputs: { piezo: 0 } } },\n        { payload: 'START OFF – HARD RESET' }\n    ]);\n\n    return null;\n}\n\n// ======================================================\n// DUBBEL START BLOKKEREN\n// ======================================================\n\nif (run !== true || context.get('running')) {\n    return null;\n}\n\n// ======================================================\n// SYSTEEM ACTIEF\n// ======================================================\n\ncontext.set('running', true);\n\nstatus('START ON');\n\n// ======================================================\n// CONFIGURATIE\n// ======================================================\n\n// DEBUG SNELHEDEN\nconst ORANGE_TIME = 0; //20 * 1000;\n\nconst T5 = 5 * 60 * 1000;\nconst T4 = 4 * 60 * 1000;\nconst T1 = 1 * 60 * 1000;\n\nconst PIEZO_BEFORE_START = 10 * 1000;\nconst PIEZO_BEFORE_FLAG = 3 * 1000;\n\nconst HORN_SHORT = 500;\nconst HORN_LONG = 2000;\n\n// ======================================================\n// ORANJE VLAG FASE\n// ======================================================\n\nnode.send([\n    { payload: { outputs: { oranje_vlag: 1 } } },\n    null,\n    null,\n    null\n]);\n\nstatus('ORANJE VLAG OP');\n\naddTimer(setTimeout(() => {\n\n    if (!context.get('running')) return;\n\n    node.send([\n        { payload: { outputs: { oranje_vlag: 0 } } },\n        null,\n        null,\n        null\n    ]);\n\n    horn(HORN_SHORT, '5 Min signaal');\n\n    scheduleClass(1);\n\n}, ORANGE_TIME));\n\n// ======================================================\n// KLASSE SCHEDULER\n// ======================================================\n\nfunction scheduleClass(classNumber) {\n\n    if (!context.get('running')) return;\n\n    context.set('classNumber', classNumber);\n\n    status(`KLASSE ${classNumber} CYCLUS GESTART`);\n\n    // ------------------------------------------\n    // 4 MIN\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        horn(HORN_SHORT, `KLASSE ${classNumber} - (4 MIN)`);\n\n    }, T5 - T4));\n\n    // ------------------------------------------\n    // 1 MIN\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        horn(HORN_SHORT, `KLASSE ${classNumber} - (1 MIN)`);\n\n    }, T5 - T1));\n\n    // ------------------------------------------\n    // PIEZO START\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(true);\n\n    }, T5 - PIEZO_BEFORE_START));\n\n   \n    // ------------------------------------------\n    // START MOMENT\n    // ------------------------------------------\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(false);\n\n        horn(HORN_LONG, `KLASSE ${classNumber} START`);\n\n        // Volgende klasse\n        scheduleClass(classNumber + 1);\n\n    }, T5));\n\n\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(true);\n\n    }, T1 - PIEZO_BEFORE_FLAG));\n\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(false);\n\n    }, T1-505));\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(true);\n\n    }, T4 - PIEZO_BEFORE_FLAG));\n\n    addTimer(setTimeout(() => {\n\n        if (!context.get('running')) return;\n\n        piezo(false);\n\n    }, T4-505));\n\n}\n\nreturn null;",
         "outputs": 4,
-        "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 540,
-        "y": 180,
+        "x": 210,
+        "y": 420,
         "wires": [
+            [],
             [
-                "5944ac8f1d5a5089"
-            ],
-            [
-                "1333e04ec6e921b1"
+                "c07b3f1c19f019c4"
             ],
             [
                 "351fe6b9047d6b7f"
@@ -86,59 +33,22 @@
         ]
     },
     {
-        "id": "5944ac8f1d5a5089",
-        "type": "show-value",
-        "z": "d6dd6a11494db256",
-        "name": "ORANJE VLAG (DO)",
-        "path": "outputs.oranje_vlag",
-        "x": 1080,
-        "y": 160,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "1333e04ec6e921b1",
-        "type": "show-value",
-        "z": "d6dd6a11494db256",
-        "name": "HOORN (DO)",
-        "path": "outputs.hoorn",
-        "x": 1060,
-        "y": 100,
-        "wires": [
-            []
-        ]
-    },
-    {
         "id": "351fe6b9047d6b7f",
         "type": "function",
         "z": "d6dd6a11494db256",
-        "name": "PIEZO BLINKER",
-        "func": "// ================= CONFIG =================\nconst ON_TIME  = 250;  // ms\nconst OFF_TIME = 750;  // ms\n\n// ================= STATE ==================\nlet timer = context.get('timer') || null;\nlet active = context.get('active') || false;\n\n// ================= HELPERS =================\nfunction send(val) {\n    node.send({\n        payload: {\n            outputs: {\n                piezo: val\n            }\n        }\n    });\n}\n\nfunction stopBlinking() {\n    active = false;\n    context.set('active', false);\n\n    if (timer !== null) {\n        clearTimeout(timer);\n        timer = null;\n        context.set('timer', null);\n    }\n\n    // Forceer UIT\n    send(0);\n}\n\n// ================= DEPLOY / CLOSE =================\nnode.on('close', function () {\n    stopBlinking();\n});\n\n// ================= LOGIC =================\nconst cmd = msg && msg.payload && msg.payload.outputs\n    ? msg.payload.outputs.piezo\n    : undefined;\n\n// START knipperen\nif (cmd === 1 && !active) {\n    active = true;\n    context.set('active', true);\n\n    function loop() {\n        if (!context.get('active')) return;\n\n        // AAN\n        send(1);\n\n        timer = setTimeout(() => {\n            if (!context.get('active')) return;\n\n            // UIT\n            send(0);\n\n            timer = setTimeout(() => {\n                loop();\n            }, OFF_TIME);\n\n            context.set('timer', timer);\n        }, ON_TIME);\n\n        context.set('timer', timer);\n    }\n\n    loop();\n    return null;\n}\n\n// STOP knipperen\nif (cmd === 0) {\n    stopBlinking();\n    return null;\n}\n\n// Andere berichten negeren\nreturn null;",
+        "name": "BLINKER",
+        "func": "// ================= CONFIG =================\nconst ON_TIME  = 250;  // ms\nconst OFF_TIME = 750;  // ms\n\n// ================= STATE ==================\nlet timer = context.get('timer') || null;\nlet active = context.get('active') || false;\n\n// ================= HELPERS =================\nfunction send(val) {\n    node.send({\n        payload: {\n            outputs: {\n                piezo: val\n            }\n        }\n    });\n}\n\nfunction stopBlinking() {\n    active = false;\n    context.set('active', false);\n\n    if (timer !== null) {\n        clearTimeout(timer);\n        timer = null;\n        context.set('timer', null);\n    }\n\n    // Forceer UIT\n    send(false);\n}\n\n// ================= DEPLOY / CLOSE =================\nnode.on('close', function () {\n    stopBlinking();\n});\n\n// ================= LOGIC =================\nconst cmd = msg && msg.payload && msg.payload.outputs\n    ? msg.payload.outputs.piezo\n    : undefined;\n\n// START knipperen\nif (cmd === 1 && !active) {\n    active = true;\n    context.set('active', true);\n\n    function loop() {\n        if (!context.get('active')) return;\n\n        // AAN\n        send(true);\n\n        timer = setTimeout(() => {\n            if (!context.get('active')) return;\n\n            // UIT\n            send(false);\n\n            timer = setTimeout(() => {\n                loop();\n            }, OFF_TIME);\n\n            context.set('timer', timer);\n        }, ON_TIME);\n\n        context.set('timer', timer);\n    }\n\n    loop();\n    return null;\n}\n\n// STOP knipperen\nif (cmd === 0) {\n    stopBlinking();\n    return null;\n}\n\n// Andere berichten negeren\nreturn null;",
         "outputs": 1,
-        "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 810,
-        "y": 200,
+        "x": 380,
+        "y": 560,
         "wires": [
             [
-                "cae96556aa6f7845"
+                "41b9e469439cab3b"
             ]
-        ]
-    },
-    {
-        "id": "cae96556aa6f7845",
-        "type": "show-value",
-        "z": "d6dd6a11494db256",
-        "name": "PIEZO (DO)",
-        "path": "outputs.piezo",
-        "x": 1050,
-        "y": 220,
-        "wires": [
-            []
         ]
     },
     {
@@ -148,81 +58,415 @@
         "name": "STATUS",
         "active": true,
         "complete": "payload",
-        "x": 880,
-        "y": 300,
+        "x": 380,
+        "y": 440,
         "wires": []
     },
     {
-        "id": "4dc3c7d96b2add0d",
-        "type": "inject",
+        "id": "2bce26de3022cb8d",
+        "type": "debug",
         "z": "d6dd6a11494db256",
-        "name": "MANUAL HOORN ON",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "true",
-        "payloadType": "bool",
-        "x": 270,
-        "y": 260,
-        "wires": [
-            [
-                "83305cbf6d571062"
-            ]
-        ]
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1020,
+        "y": 540,
+        "wires": []
     },
     {
-        "id": "9b438688917650cd",
-        "type": "inject",
-        "z": "d6dd6a11494db256",
-        "name": "MANUAL HOORN OFF",
-        "props": [
-            {
-                "p": "payload"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": "",
-        "topic": "",
-        "payload": "false",
-        "payloadType": "bool",
-        "x": 270,
-        "y": 300,
-        "wires": [
-            [
-                "83305cbf6d571062"
-            ]
-        ]
-    },
-    {
-        "id": "83305cbf6d571062",
+        "id": "41b9e469439cab3b",
         "type": "function",
         "z": "d6dd6a11494db256",
-        "name": "Manual horn HOLD",
-        "func": "// Manual hoorn HOLD (drukken = aan, loslaten = uit)\n\nconst on = msg.payload === true;\n\nnode.send({\n  payload: {\n    outputs: {\n      hoorn: on ? 1 : 0\n    }\n  }\n});\n\nreturn null;",
+        "name": "Convert",
+        "func": "msg.payload = msg.payload.outputs.piezo ? true : false;\nreturn msg;",
         "outputs": 1,
-        "x": 530,
-        "y": 280,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 520,
+        "y": 560,
         "wires": [
             [
-                "1333e04ec6e921b1"
+                "8250503576e45f88"
             ]
         ]
     },
     {
-        "id": "2708aac71c1019c8",
-        "type": "global-config",
-        "env": [],
-        "modules": {
-            "node-red-show-value": "1.0.4"
-        }
+        "id": "c07b3f1c19f019c4",
+        "type": "function",
+        "z": "d6dd6a11494db256",
+        "name": "Convert",
+        "func": "msg.payload = msg.payload.outputs.hoorn ? true : false;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 380,
+        "y": 340,
+        "wires": [
+            [
+                "27249bdd3c240ba8"
+            ]
+        ]
+    },
+    {
+        "id": "7283312c4598f47c",
+        "type": "debug",
+        "z": "d6dd6a11494db256",
+        "name": "debug 2",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1020,
+        "y": 320,
+        "wires": []
+    },
+    {
+        "id": "2a50cb64c0c3e667",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "Drukknop puls",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "",
+        "payload": "1",
+        "payloadType": "num",
+        "x": 650,
+        "y": 200,
+        "wires": [
+            [
+                "91b2fd32a2f3453c"
+            ]
+        ]
+    },
+    {
+        "id": "91b2fd32a2f3453c",
+        "type": "function",
+        "z": "d6dd6a11494db256",
+        "name": "Toggle Aan/Uit",
+        "func": "var state = context.get('state') || false;\nstate = !state;\ncontext.set('state', state);\nmsg.payload = state ? true : false;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 860,
+        "y": 140,
+        "wires": [
+            [
+                "e436293c51cd1306",
+                "fb0652fa39e25f3a"
+            ]
+        ]
+    },
+    {
+        "id": "082ec87f9c55b6e8",
+        "type": "debug",
+        "z": "d6dd6a11494db256",
+        "name": "debug 4",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1020,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "8250503576e45f88",
+        "type": "delay",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "103",
+        "timeoutUnits": "milliseconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 670,
+        "y": 560,
+        "wires": [
+            [
+                "f47ce65ae4a42eae"
+            ]
+        ]
+    },
+    {
+        "id": "e436293c51cd1306",
+        "type": "link out",
+        "z": "d6dd6a11494db256",
+        "name": "ON/OFF",
+        "mode": "link",
+        "links": [
+            "14ec09ec95749a6b",
+            "c4f5f20ecd5aa90b"
+        ],
+        "x": 1015,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "14ec09ec95749a6b",
+        "type": "link in",
+        "z": "d6dd6a11494db256",
+        "name": "link in 1",
+        "links": [
+            "e436293c51cd1306"
+        ],
+        "x": 135,
+        "y": 420,
+        "wires": [
+            [
+                "ad45c374913e8be0"
+            ]
+        ]
+    },
+    {
+        "id": "c4f5f20ecd5aa90b",
+        "type": "link in",
+        "z": "d6dd6a11494db256",
+        "name": "link in 2",
+        "links": [
+            "e436293c51cd1306"
+        ],
+        "x": 705,
+        "y": 440,
+        "wires": [
+            [
+                "2f6c137643c72798"
+            ]
+        ]
+    },
+    {
+        "id": "27249bdd3c240ba8",
+        "type": "delay",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "51",
+        "timeoutUnits": "milliseconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 670,
+        "y": 340,
+        "wires": [
+            [
+                "de1706091a673025"
+            ]
+        ]
+    },
+    {
+        "id": "fe3a6e47cdb88c90",
+        "type": "inject",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "0.1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 150,
+        "y": 180,
+        "wires": [
+            [
+                "9060f45305b0864c"
+            ]
+        ]
+    },
+    {
+        "id": "04896600a7556f9f",
+        "type": "rbe",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": true,
+        "property": "payload",
+        "topi": "topic",
+        "x": 490,
+        "y": 140,
+        "wires": [
+            [
+                "d511b0c12243375c"
+            ]
+        ]
+    },
+    {
+        "id": "d511b0c12243375c",
+        "type": "function",
+        "z": "d6dd6a11494db256",
+        "name": "Convert",
+        "func": "if(msg.payload==true)\n{\n    msg.payload=1;\n}\nelse\n{\n    msg=null;    \n}\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 140,
+        "wires": [
+            [
+                "91b2fd32a2f3453c"
+            ]
+        ]
+    },
+    {
+        "id": "a23ed0853c088b48",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "path": "",
+        "x": 1030,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "5a272c46ac30ce7d",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "path": "",
+        "x": 1030,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "06b0d09ab9ac66f0",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "path": "",
+        "x": 1030,
+        "y": 580,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "fb0652fa39e25f3a",
+        "type": "show-value",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "path": "",
+        "x": 1070,
+        "y": 140,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "de1706091a673025",
+        "type": "CC100-Set-DO1",
+        "z": "d6dd6a11494db256",
+        "name": "DO1 Hoorn",
+        "x": 830,
+        "y": 340,
+        "wires": [
+            [
+                "7283312c4598f47c",
+                "5a272c46ac30ce7d"
+            ]
+        ]
+    },
+    {
+        "id": "2f6c137643c72798",
+        "type": "CC100-Set-DO2",
+        "z": "d6dd6a11494db256",
+        "name": "DO2 LAMP",
+        "x": 830,
+        "y": 440,
+        "wires": [
+            [
+                "082ec87f9c55b6e8",
+                "a23ed0853c088b48"
+            ]
+        ]
+    },
+    {
+        "id": "f47ce65ae4a42eae",
+        "type": "CC100-Set-DO3",
+        "z": "d6dd6a11494db256",
+        "name": "DO3 PIEZO",
+        "x": 830,
+        "y": 560,
+        "wires": [
+            [
+                "2bce26de3022cb8d",
+                "06b0d09ab9ac66f0"
+            ]
+        ]
+    },
+    {
+        "id": "9060f45305b0864c",
+        "type": "CC100-Read-DI",
+        "z": "d6dd6a11494db256",
+        "name": "",
+        "x": 320,
+        "y": 180,
+        "wires": [
+            [
+                "04896600a7556f9f"
+            ],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+            []
+        ]
     }
 ]
