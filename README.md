@@ -45,6 +45,6 @@ docker run -d \
 
 IP adresses: 
 ```text
-ETH0 / X2: DHCP
-ETH1: 10.10.10.10
+ETH0 / X2:  DHCP
+ETH1: / X2: 10.10.10.10
 ```
