@@ -10,10 +10,9 @@ ORANGE (20s)
 5 min signaal
  ↓
 KLASSE 1
-  - 4 min
-  - 1 min
-  - piezo 10s
-  - START (lang signaal)
+  - 4 min / PIEZO 3 sec voor event
+  - 1 min / PIEZO 3 sec voor event
+  - START (lang signaal)  / PIEZO 10 sec voor event
  ↓
 KLASSE 2
  ↓
