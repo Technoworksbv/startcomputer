@@ -43,3 +43,9 @@ docker run -d \
   -v /media/SD/node_red_data:/data \
   wagoautomation/node-red-cc100:1.0.0
 ```
+
+IP adresses: 
+```text
+ETH0 / X2: DHCP
+ETH1: 10.10.10.10
+```
